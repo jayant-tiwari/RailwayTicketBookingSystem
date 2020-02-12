@@ -109,14 +109,30 @@ void checkUser(char *username, char *password, int client_fd)
 
 void addUser(char *username,char *password,int client_fd)
 {
+	bool already_exists=false;
 	printf("%d\n",client_fd);
 	user fresh;
+	int fd=open("userDB",O_RDONLY);
+	while(read(fd,&fresh,sizeof(fresh))>0)
+	{
+		if(strcmp(fresh.username,username)==0)
+		{
+			already_exists=true;
+			break;
+		}
+	}
+	close(fd);
 	strcpy(fresh.username,username);
-	strcpy(fresh.password,password);
+        strcpy(fresh.password,password);
+	if(!already_exists)
+	{
 	int fd=open("userDB",O_WRONLY | O_APPEND);
 	write(fd, &fresh, sizeof(fresh));
 	close(fd);
 	sendMsgtoClient(client_fd,"You are onbaord now! Press 0 to continue");
+	}
+	else
+		sendMsgtoClient(client_fd,"Username already exists! Press 0 to continue");
 }
 
 void talkToClient(int client_fd,int choice)
