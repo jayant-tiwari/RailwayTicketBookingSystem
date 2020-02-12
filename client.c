@@ -97,7 +97,7 @@ int main(int argc,char **argv)
 
     while(1) {
         msgFromServer = receiveMsgFromServer(sock_fd);
-        if(msgFromServer == NULL)
+        if(msgFromServer == NULL || strcmp(msgFromServer,"exiting")==0)
             break;
         if(strncmp(msgFromServer, "unauth", 6) == 0) {
             printf("Unautherized User.\n");
@@ -116,7 +116,7 @@ int main(int argc,char **argv)
         }
     }
 
-    while(1) {
+    while(1 && strcmp(msgFromServer,"exiting")!=0) {
         msgFromServer = receiveMsgFromServer(sock_fd);
         if(msgFromServer == NULL)
             break;
