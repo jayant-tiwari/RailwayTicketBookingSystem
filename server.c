@@ -24,6 +24,19 @@ typedef struct login{
 	char password[100];
 //	char type;
 }user;
+typedef struct trainInfo
+{
+	int tid;
+	char from[10];
+	char to[10];
+	char dep[10];
+	char arr[10];
+	int seats;
+}train;
+typedef struct bookedTicket{
+	int train;
+	int seat;
+}bt;
 
 void sendMsgtoClient(int clientFD, char *str) {
     int numPacketsToSend = (strlen(str)-1)/RESPONSE_BYTES + 1;
@@ -86,7 +99,181 @@ void closeClient(int client_fd,char *str)
 	sendMsgtoClient(client_fd,str);
 	shutdown(client_fd,SHUT_RDWR);
 }
+void bookTicket(char *username,char *password,int client_fd)
+{
+	train t;
+	bt current;
+	int num,trainNo,seatNo,choice,fd;
+	bool bookedTicket=false;
+	char *temp=(char *)malloc(10);
+	char *available=(char *)malloc(500);
+	while(1)
+	{
+	fd=open("trainDB",O_RDONLY);
+	strcpy(available," ");
+        while(read(fd,&t,sizeof(t))>0)
+        {
+                num=t.tid;
+                sprintf(temp,"%d",num);
+                strcat(available,temp);
+                strcat(available," From:");
+                strcat(available,t.from);
+                strcat(available," To:");
+                strcat(available,t.to);
+                strcat(available," DEP:");
+                strcat(available,t.dep);
+                strcat(available," ARR:");
+                strcat(available,t.arr);
+                strcat(available," Seats:");
+                num=t.seats;
+                sprintf(temp,"%d",num);
+                strcat(available,temp);
+                strcat(available,"\n");
 
+        }
+        close(fd);
+        strcat(available,"Enter Train Number:");
+	bookedTicket=false;
+	sendMsgtoClient(client_fd,available);
+	temp=recieveMsgFromClient(client_fd);
+	trainNo=atoi(temp);
+	fd=open("trainDB",O_RDWR);
+	while(read(fd,&t,sizeof(t))>0)
+	{
+		if(trainNo==t.tid)
+		{
+			if(t.seats!=0)
+			{
+		                seatNo=t.seats;
+                                t.seats=t.seats-1;
+				lseek(fd,-1*sizeof(train),SEEK_CUR);
+				write(fd,&t,sizeof(t));
+				bookedTicket=true;
+				close(fd);
+				sendMsgtoClient(client_fd,"Tickets Booked");
+				//temp=recieveMsgFromClient(client_fd);
+				break;
+			}
+			else
+			{
+				sendMsgtoClient(client_fd,"No seats Press any key to continue");
+				//temp=recieveMsgFromClient(client_fd);
+				close(fd);
+				break;
+				
+			}
+		}
+	}
+	close(fd);
+	if(bookedTicket)
+	{
+		fd=open(username,O_WRONLY | O_APPEND);
+		current.train=trainNo;
+		current.seat=seatNo;
+		write(fd,&current,sizeof(current));
+		close(fd);
+
+	}
+	sendMsgtoClient(client_fd,"Want to book more tickets: Yes-0 No-1");
+	temp=recieveMsgFromClient(client_fd);
+	choice=atoi(temp);
+	if(choice!=0)
+		break;
+	}
+
+
+}
+void bookedHistory(char *username,int client_fd)
+{
+
+	char *temp=(char *)malloc(100);
+	char *history=(char *)malloc(500);
+	bt myhistory;
+	int fd=open(username,O_RDONLY);
+	while(read(fd,&myhistory,sizeof(myhistory))>0)
+	{
+	//	printf("Inside Booking History\n");
+		sprintf(temp,"%d",myhistory.train);
+		strcat(history,"Train number: ");
+		strcat(history,temp);
+		sprintf(temp,"%d",myhistory.seat);
+		strcat(history," Seat number: ");
+		strcat(history,temp);
+		strcat(history,"\n");
+	//	printf("Inside Booking History\n");
+
+	}
+	close(fd);
+	strcat(history,"Press 0 to continue");
+	sendMsgtoClient(client_fd,history);
+	temp=recieveMsgFromClient(client_fd);
+
+}
+void changePassword(char *username,int client_fd)
+{
+
+	user change;
+	int fd,count=0;
+	char *newPass=(char *)malloc(100);
+	char *confirmPass=(char *)malloc(100);
+		fd=open("userDB",O_RDWR);
+		while(read(fd,&change,sizeof(change))>0)
+		{
+			if(strcmp(change.username,username)==0)
+			{
+				while(count<3)
+				{
+				count++;
+				sendMsgtoClient(client_fd,"Enter New Password:\n");
+				newPass=recieveMsgFromClient(client_fd);
+				sendMsgtoClient(client_fd,"Confirm Password:\n");
+				confirmPass=recieveMsgFromClient(client_fd);
+				if(strcmp(newPass,confirmPass)==0)
+				{
+					lseek(fd,-1*(sizeof(user)),SEEK_CUR);
+					strcpy(change.password,newPass);
+					write(fd,&change,sizeof(change));
+							sendMsgtoClient(client_fd,"Password changed successfully");
+					count=3;
+					break;
+				}
+				else
+				{
+					sendMsgtoClient(client_fd,"Did not match");
+				}
+				}
+
+			}
+		}
+	close(fd);
+}
+
+void userInterface(char *username,char *password,int client_fd)
+{
+
+	int choice=-1;
+	char *buff;
+	char options[]="\n1-Book Ticket\n2-Cancel Ticket\n3-Booked Ticket History\n4-Change Password\n5-Exit\n";
+	while(choice!=5)
+	{
+	sendMsgtoClient(client_fd,options);
+	buff=recieveMsgFromClient(client_fd);
+	choice=atoi(buff);
+	switch(choice)
+	{
+		case 1: bookTicket(username,password,client_fd);
+			break;
+		//case 2: cancelTicket(username,client_fd);
+		//	break;
+		case 3: bookedHistory(username,client_fd);
+			break;
+		case 4: changePassword(username,client_fd);
+			break;
+		case 5: break;
+
+	}
+	}
+}
 void checkUser(char *username, char *password, int client_fd)
 {
 	user current;
@@ -102,9 +289,13 @@ void checkUser(char *username, char *password, int client_fd)
 			break;
 		}
 	}
+	close(fd);
 	if(flag==false)
 		printf("Tresspassing\n");//sendMsgtoClient(client_fd,"TressPassing !");
-	close(fd);
+	else
+	{
+		userInterface(username,password,client_fd);
+	}
 }
 
 void addUser(char *username,char *password,int client_fd)
@@ -130,11 +321,28 @@ void addUser(char *username,char *password,int client_fd)
 	write(fd, &fresh, sizeof(fresh));
 	close(fd);
 	sendMsgtoClient(client_fd,"You are onbaord now! Press 0 to continue");
+	fd=open(username,O_CREAT | O_RDWR,0744);
+	close(fd);
 	}
 	else
 		sendMsgtoClient(client_fd,"Username already exists! Press 0 to continue");
 }
 
+/*
+void addAdmin(char *adminName,char *password,int client_fd)
+{
+
+	user admin;
+	int fd=open("adminDB",O_RDONLY);
+	while(read(fd,&admin,sizeof(admin))>0)
+	{
+		if(strcmp(admin.username,username)==0 && strcmp(admin.password,password)==0)
+		{
+
+		}
+	}
+}
+*/
 void talkToClient(int client_fd,int choice)
 {
 	char *username,*password;
@@ -168,6 +376,9 @@ void talkToClient(int client_fd,int choice)
 			closeclient(client_fd,strcat(str,username));*/
 			break;
 
+//		case 2: addAdmin(username,password,client_fd);
+
+
 	/*	case UNAUTH_USER:
 			closeclient(client_fd,"unauthorised");
 			break;
@@ -182,6 +393,8 @@ void homePage(int client_fd)
 	int choice=4;
 	char options[]="\n 1-User Login \n 2-Admin Login \n 3-Agent Login \n 4-Register User \n 5-Exit \n";
 	char *temp=NULL;
+//	char *username=(char *)malloc(100);
+//	char *password=(char *)malloc(100);
 	int value;
 
 	while(choice!=5)
@@ -204,6 +417,10 @@ void homePage(int client_fd)
 	{
 		talkToClient(client_fd,choice);
 
+	}
+	if(choice==2)
+	{
+		talkToClient(client_fd,choice);
 	}
 	}
 	closeClient(client_fd,"exiting");

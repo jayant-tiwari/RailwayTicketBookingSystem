@@ -105,15 +105,20 @@ int main(int argc,char **argv)
             break;
         }
         printf("%s\n",msgFromServer);
-        free(msgFromServer);
+       // free(msgFromServer);
         
-        memset(msgToServer, 0, sizeof(msgToServer));
+	if(strcmp(msgFromServer,"Did not match")!=0 && strcmp(msgFromServer,"Password changed successfully")!=0 && strcmp(msgFromServer,"Tickets Booked")!=0 && strcmp(msgFromServer,"No seats")!=0)
+	{
+	memset(msgToServer, 0, sizeof(msgToServer));
         scanf("%s", msgToServer);
         sendMsgToServer(sock_fd, msgToServer);
         if(strncmp(msgToServer, "exit", 4) == 0) {
             shutdown(sock_fd, SHUT_WR);
+	    free(msgFromServer);
             break;
         }
+	}
+	free(msgFromServer);
     }
 
     while(1 && strcmp(msgFromServer,"exiting")!=0) {
